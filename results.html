@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaze Study Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #uploadGazeData {
+            display: block;
+            margin: 0 auto 20px;
+        }
+        #resultsContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .image-container img, .image-container .blank-image {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border-bottom: 2px solid #ccc;
+        }
+        .gaze-dot {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        .gaze-dot.first {
+            background: green;
+            width: 15px;
+            height: 15px;
+        }
+        .gaze-dot.last {
+            background: red;
+            width: 15px;
+            height: 15px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        #downloadPDF {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #downloadPDF:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload and View Gaze Study Results</h1>
+    <input type="file" id="uploadGazeData" accept=".json">
+    <div id="resultsContainer"></div>
+    <button id="downloadPDF" style="display: none;">Download Study Result as PDF</button>
+
+    <!-- Include local html2pdf.bundle.min.js -->
+    <script src="html2pdf.bundle.min.js"></script>
+    <script>
+        document.getElementById('uploadGazeData').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/json') {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = JSON.parse(e.target.result);
+                    displayResults(data);
+                    document.getElementById('downloadPDF').style.display = 'inline'; // Show the download button
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Please upload a valid JSON file.');
+            }
+        });
+
+        function displayResults(data) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = ''; // Clear previous results
+            const images = {};
+
+            data.forEach(entry => {
+                const imageSrc = entry.image;
+                if (!images[imageSrc]) {
+                    images[imageSrc] = [];
+                }
+                images[imageSrc].push(entry);
+            });
+
+            for (const [imageSrc, gazeEntries] of Object.entries(images)) {
+                const container = document.createElement('div');
+                container.classList.add('image-container');
+
+                let img;
+                let imgWidth, imgHeight;
+
+                if (imageSrc === 'blank') {
+                    // Create a blank white background for "blank" images
+                    img = document.createElement('div');
+                    img.style.width = '600px';
+                    img.style.height = '400px';
+                    img.style.backgroundColor = 'white';
+                    img.classList.add('blank-image');
+                    imgWidth = 600;
+                    imgHeight = 400;
+                    appendGazeData(container, gazeEntries, imgWidth, imgHeight);
+                } else {
+                    img = document.createElement('img');
+                    img.src = imageSrc;
+
+                    img.onload = function() {
+                        imgWidth = img.offsetWidth;
+                        imgHeight = img.offsetHeight;
+                        appendGazeData(container, gazeEntries, imgWidth, imgHeight);
+                    };
+                }
+
+                container.appendChild(img);
+                resultsContainer.appendChild(container);
+            }
+        }
+
+        function appendGazeData(container, gazeEntries, imgWidth, imgHeight) {
+            // Ensure gaze points are relative to the image dimensions and stay within bounds
+            gazeEntries.forEach((entry, index) => {
+                const gazeDot = document.createElement('div');
+                gazeDot.classList.add('gaze-dot');
+
+                // Parse transform values
+                const transformValues = entry.transform.match(/translate3d\(([^,]+), ([^,]+),/);
+                if (transformValues) {
+                    let x = parseFloat(transformValues[1]);
+                    let y = parseFloat(transformValues[2]);
+
+                    // Adjust dot position relative to image dimensions, ensuring it's within bounds
+                    x = Math.min(Math.max(0, x), imgWidth - 15);  // Prevent overflow on X-axis
+                    y = Math.min(Math.max(0, y), imgHeight - 15); // Prevent overflow on Y-axis
+
+                    // Position the dot
+                    gazeDot.style.left = `${x}px`;
+                    gazeDot.style.top = `${y}px`;
+
+                    // Differentiate the size and color of the first and last gaze points
+                    if (index === 0) {
+                        gazeDot.classList.add('first'); // First gaze point
+                    } else if (index === gazeEntries.length - 1) {
+                        gazeDot.classList.add('last'); // Last gaze point
+                    }
+
+                    container.appendChild(gazeDot);
+                }
+            });
+
+            // Additional visualization: Line graph of the user's gaze over time
+            const canvas = document.createElement('canvas');
+            canvas.width = imgWidth;
+            canvas.height = imgHeight;
+            container.appendChild(canvas);
+
+            const ctx = canvas.getContext('2d');
+
+            // Draw lines connecting all gaze points in order of time
+            if (gazeEntries.length > 0) {
+                const firstPointTransformValues = gazeEntries[0].transform.match(/translate3d\(([^,]+), ([^,]+),/);
+                const lastPointTransformValues = gazeEntries[gazeEntries.length - 1].transform.match(/translate3d\(([^,]+), ([^,]+),/);
+
+                if (firstPointTransformValues) {
+                    let x = parseFloat(firstPointTransformValues[1]);
+                    let y = parseFloat(firstPointTransformValues[2]);
+
+                    // Ensure the first point is within bounds
+                    x = Math.min(Math.max(0, x), imgWidth - 15);  // Prevent overflow on X-axis
+                    y = Math.min(Math.max(0, y), imgHeight - 15); // Prevent overflow on Y-axis
+
+                    ctx.strokeStyle = 'yellow'; // Color for the path
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                }
+
+                gazeEntries.forEach((entry, index) => {
+                    const transformValues = entry.transform.match(/translate3d\(([^,]+), ([^,]+),/);
+                    if (transformValues) {
+                        let x = parseFloat(transformValues[1]);
+                        let y = parseFloat(transformValues[2]);
+
+                        // Ensure gaze points are within bounds
+                        x = Math.min(Math.max(0, x), imgWidth - 15);  // Prevent overflow on X-axis
+                        y = Math.min(Math.max(0, y), imgHeight - 15); // Prevent overflow on Y-axis
+
+                        ctx.lineTo(x, y);
+                    }
+                });
+
+                if (lastPointTransformValues) {
+                    let x = parseFloat(lastPointTransformValues[1]);
+                    let y = parseFloat(lastPointTransformValues[2]);
+
+                    // Ensure the last point is within bounds
+                    x = Math.min(Math.max(0, x), imgWidth - 15);  // Prevent overflow on X-axis
+                    y = Math.min(Math.max(0, y), imgHeight - 15); // Prevent overflow on Y-axis
+
+                    ctx.lineTo(x, y);
+                    ctx.stroke(); // Draw the path in yellow
+                }
+            }
+        }
+
+        document.getElementById('downloadPDF').addEventListener('click', function() {
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            // Define options for html2pdf
+            const opt = {
+                margin:       [10, 10, 10, 10], // margins (top, left, bottom, right)
+                filename:     'gaze_study_results.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, logging: true },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            // Use html2pdf to convert the HTML to PDF
+            html2pdf().from(resultsContainer).set(opt).save();
+        });
+    </script>
+</body>
+</html>

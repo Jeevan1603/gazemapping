@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGazer Eye Tracking Study</title>
+    <script src="webgazer.js"></script>
+    <link rel="stylesheet" type="text/css" href="./css/style.css">
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background-color: white;
+        }
+
+        #webgazerGazeDot {
+            display: block;
+            position: fixed;
+            z-index: 99999;
+            left: -5px;
+            top: -5px;
+            background: red;
+            border-radius: 100%;
+            opacity: 0.7;
+            width: 10px;
+            height: 10px;
+        }
+
+        #imageContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px solid red;
+        }
+
+        #downloadDataBtn {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 100001;
+            padding: 10px 20px;
+            background-color: blue;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="imageContainer"></div>
+    <div id="webgazerGazeDot"></div>
+    <button id="downloadDataBtn" onclick="downloadGazeData()">Download Gaze Data</button>
+
+    <script>
+        let gazeData = [];
+        let currentImageIndex = 0;
+
+        const images = [
+            { src: 'assets/1.webp', duration: 12000 },  // 1: 12 sec
+            { src: 'assets/2.webp', duration: 12000 },  // 2: 12 sec
+            { src: 'assets/3.webp', duration: 8000 },   // 3: 8 sec
+            { src: 'assets/4.webp', duration: 8000 },   // 4: 8 sec
+            { src: 'assets/5.webp', duration: 8000 },   // 5: 8 sec
+            { src: 'assets/6.webp', duration: 8000 },   // 6: 8 sec
+            { src: 'assets/7.webp', duration: 12000 },  // 7: 12 sec
+            { src: 'assets/8.webp', duration: 12000 },  // 8: 12 sec
+            { src: 'assets/9.webp', duration: 12000 },  // 9: 12 sec
+            { src: 'assets/10.webp', duration: 8000 },  // 10: 8 sec
+            { src: 'assets/11.webp', duration: 8000 },  // 11: 8 sec
+            { src: 'assets/12.webp', duration: 8000 },  // 12: 8 sec
+            { src: 'assets/13.webp', duration: 8000 },  // 13: 8 sec
+            { src: 'assets/14.webp', duration: 12000 }, // 14: 12 sec
+            { src: 'assets/15.webp', duration: 12000 }, // 15: 12 sec
+            { src: 'assets/16.webp', duration: 12000 }, // 16: 12 sec
+            { src: 'assets/17.webp', duration: 10000 }, // 17: 10 sec
+            { src: 'assets/18.webp', duration: 10000 }, // 18: 10 sec
+            { src: 'assets/19.webp', duration: 10000 }, // 19: 10 sec
+            { src: 'assets/20.webp', duration: 10000 }, // 20: 10 sec
+            { src: 'assets/21.webp', duration: null },  // 21: unlimited
+            { src: 'assets/22.webp', duration: null },  // 22: unlimited
+            { src: 'assets/23.webp', duration: null },  // 23: unlimited
+            { src: 'assets/24.webp', duration: 25000 }, // 24: 25 sec
+            { src: 'assets/25.webp', duration: 25000 }, // 25: 25 sec
+            { src: 'assets/26.webp', duration: 15000 }, // 26: 15 sec
+            { src: 'assets/27.webp', duration: null },  // 27: unlimited
+            { src: 'assets/28.webp', duration: null },  // 28: unlimited
+            { src: 'assets/29.webp', duration: null },  // 29: unlimited
+            { src: 'assets/30.webp', duration: null },  // 30: unlimited
+            { src: 'assets/31.webp', duration: 10000 }, // 31: 10 sec
+            { src: 'assets/32.webp', duration: 15000 }, // 32: 15 sec
+            { src: 'assets/plain.png', duration: null },              // 33: blank (unlimited)
+            { src: 'assets/plain.png', duration: null },              // 34: blank (unlimited)
+            { src: 'assets/plain.png', duration: null },              // 35: blank (unlimited)
+            { src: 'assets/plain.png', duration: null },              // 36: blank (unlimited)
+            { src: 'assets/plain.png', duration: null },              // 37: blank (unlimited)
+            { src: 'assets/plain.png', duration: null },              // 38: blank (unlimited)
+        ];
+
+        function startWebGazer() {
+            // Set Kalman filter as default
+            webgazer.params.applyKalmanFilter = true;
+
+            webgazer.params.showVideoPreview = false;
+            webgazer.params.showFaceOverlay = false;
+            webgazer.params.showFaceFeedbackBox = false;
+
+            webgazer.setGazeListener((data, elapsedTime) => {
+                if (data !== null) {
+                    const gazeDotElement = document.querySelector('#webgazerGazeDot');
+                    const imageContainer = document.getElementById('imageContainer');
+                    const rect = imageContainer.getBoundingClientRect();
+
+                    const relativeX = data.x - rect.left;
+                    const relativeY = data.y - rect.top;
+
+                    if (relativeX >= 0 && relativeY >= 0 && relativeX <= rect.width && relativeY <= rect.height) {
+                        gazeDotElement.style.transform = `translate3d(${relativeX}px, ${relativeY}px, 0px)`;
+                        gazeData.push({
+                            image: images[currentImageIndex]?.src || 'blank',
+                            transform: `translate3d(${relativeX}px, ${relativeY}px, 0px)`,
+                            time: elapsedTime
+                        });
+                    }
+                }
+            }).begin();
+        }
+
+        function showNextImage() {
+            if (currentImageIndex < images.length) {
+                const image = images[currentImageIndex];
+                const imageContainer = document.getElementById('imageContainer');
+
+                if (image.src) {
+                    const img = new Image();
+                    img.src = image.src;
+                    img.onload = () => {
+                        imageContainer.style.width = `${img.width}px`;
+                        imageContainer.style.height = `${img.height}px`;
+                        imageContainer.style.backgroundImage = `url(${img.src})`;
+                    };
+                } else {
+                    // Blank white page
+                    imageContainer.style.width = '100%';
+                    imageContainer.style.height = '100%';
+                    imageContainer.style.backgroundImage = 'none';
+                    imageContainer.style.backgroundColor = 'white';
+                }
+
+                if (image.duration !== null) {
+                    setTimeout(() => {
+                        currentImageIndex++;
+                        showNextImage();
+                    }, image.duration);
+                } else {
+                    const nextBtn = document.createElement('button');
+                    nextBtn.textContent = 'Next Image';
+                    nextBtn.style.position = 'fixed';
+                    nextBtn.style.bottom = '10px';
+                    nextBtn.style.right = '10px';
+                    nextBtn.onclick = () => {
+                        nextBtn.remove();
+                        currentImageIndex++;
+                        showNextImage();
+                    };
+                    document.body.appendChild(nextBtn);
+                }
+            } else {
+                endStudy();
+            }
+        }
+
+        function downloadGazeData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gazeData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "gaze_data.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+
+            window.open('results.html', '_blank');
+        }
+
+        function endStudy() {
+            webgazer.end();
+            alert('Study Complete! You can now download the gaze data.');
+        }
+
+        window.onload = () => {
+            startWebGazer();
+            showNextImage();
+        };
+    </script>
+</body>
+</html>
